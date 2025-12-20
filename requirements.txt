@@ -1,0 +1,31 @@
+# Data manipulation
+pandas
+numpy
+scipy
+
+# Data access
+kloppy
+skillcorner
+
+# Football-specific plotting
+mplsoccer
+
+
+# Visualization
+matplotlib
+seaborn
+plotly  
+pyvis   
+graphviz
+altair
+
+# Utilities
+tqdm        
+jupyter     
+LanusStats
+scikit-learn
+databallpy
+penaltyblog
+
+streamlit
+st-selectable-grid
