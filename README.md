@@ -1,54 +1,51 @@
 # SkillCorner X PySport Analytics Cup
-This repository contains the submission template for the SkillCorner X PySport Analytics Cup **Analyst Track**. 
-Your submission for the **Analyst Track** should be on the `main` branch of your own fork of this repository.
-
-Find the Analytics Cup [**dataset**](https://github.com/SkillCorner/opendata/tree/master/data) and [**tutorials**](https://github.com/SkillCorner/opendata/tree/master/resources) on the [**SkillCorner Open Data Repository**](https://github.com/SkillCorner/opendata).
-
-## Submitting
-Make sure your `main` branch contains:
-
-1. A single Jupyter Notebook in the root of this repository called `submission.ipynb`
-    - This Juypter Notebook can not contain more than 2000 words.
-    - All other code should also be contained in this repository, but should be imported into the notebook from the `src` folder.
-
-
-or,
-
-
-1. A single Python file in the root of this repository called `main.py`
-    - This file should not contain more than 2000 words.
-    - All other code should also be contained in this repository, but should be imported into the notebook from the `src` folder.
-
-or, 
-
-
-1. A publicly accessible web app or website written in a language of your choice (e.g. Javascript)
-
-    - Your code should follow a clear and well defined structure.
-    - All other code should also be contained in this repository.
-    - The URL to the webapp should be included at the bottom of the read me under **URL to Web App / Website**
-
-
-2. An abstract of maximum 300 words that follows the **Analyst Track Abstract Template**.
-3. Add a URL to a screen recording video of maximum 60 seconds that shows your work. Add it under the **Video URL** Section below. (Use YouTube, or any other site to share this video).
-4. Submit your GitHub repository on the [Analytics Cup Pretalx page](https://pretalx.pysport.org)
-
-Finally:
-- Make sure your GitHub repository does **not** contain big data files. The tracking data should be loaded directly from the [Analytics Cup Data GitHub Repository](https://github.com/SkillCorner/opendata). For more information on how to load the data directly from GitHub please see this [Jupyter Notebook](https://github.com/SkillCorner/opendata/blob/master/resources/getting-started-skc-tracking-kloppy.ipynb).
-- Make sure the `submission.ipynb` notebook runs on a clean environment, or
-- Provide clear and concise instructions how to run the `main.py` (e.g. `streamlit run main.py`) if applicable in the **Run Instructions** Section below.
-- Providing a URL to a publically accessible webapp or website with a running version of your submission is mandatory when choosing to submit in a different language then Python, it is encouraged, but optional when submitting in Python.
-
-_⚠️ Not adhering to these submission rules and the [**Analytics Cup Rules**](https://pysport.org/analytics-cup/rules) may result in a point deduction or disqualification._
+This repository contains the submission for the SkillCorner X PySport Analytics Cup **Analyst Track**. 
+Author: Martin Steglich
 
 ---
 
-## Analyst Track Abstract Template (max. 300 words)
+## Analyst Track Abstract
 #### Introduction
 
-#### Usecase(s)
+Understanding how teams organise collectively on the pitch is a key challenge
+in modern football analysis. While tactical concepts such as compactness,
+width or block height are widely used by practitioners, they are often described
+qualitatively or through isolated snapshots. Using tracking data from the
+SkillCorner Open Data set, this project proposes a structured and reproducible
+approach to quantify and visualise collective team shape across different
+contexts within a single match. The objective is to illustrate how a team’s
+spatial organisation changes depending on possession state and attacking phase,
+using geometrical metrics derived directly from player and ball positions.
+
+#### Use case(s)
+
+This project is designed as a practical tool to support team shape analysis
+using tracking data. A primary use case is the descriptive analysis of a team’s
+collective spatial organisation during a match, allowing analysts to quantify
+how width, depth and compactness vary across possession states and attacking
+contexts.
+
+From a coaching and performance analysis perspective, the methodology can be
+used to:
+- Compare team shape behaviour in and out of possession.
+- Identify tendencies in how a team expands or contracts depending on ball
+  location and phase of play.
+- Support post-match reviews by providing objective, reproducible visual
+  summaries of team structure.
+
+Additionally, the framework can be applied in an opposition analysis context,
+where analysts may compare shape profiles across matches or teams to highlight
+structural differences without relying on subjective interpretations.
 
 #### Potential Audience
+
+This work is intended for performance analysts, coaches and data scientists
+working in professional or semi-professional football environments. The
+methodology can support opposition analysis, self-analysis and tactical
+profiling by providing a clear and interpretable framework to describe team
+shape dynamics. In addition, the open and modular structure of the codebase
+makes it suitable for analysts interested in extending team shape analysis to
+other competitions, teams or contextual dimensions.
 
 ---
 
@@ -57,6 +54,9 @@ _⚠️ Not adhering to these submission rules and the [**Analytics Cup Rules**]
 ---
 
 ## Run Instructions
+- clone `main` branch
+- run `pip install -f requirements.txt`
+- open `submission.ipynb` and run all cells
 
 ---
 
