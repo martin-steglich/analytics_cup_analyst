@@ -1,6 +1,6 @@
 # app/sidebar.py
 import streamlit as st
-from services.data_loader import load_available_matches
+from src.app.services.data_loader import load_available_matches
 from src.metrics import METRIC_UNITS
 
 def render_sidebar_match_team_selection():
@@ -61,13 +61,13 @@ def render_sidebar_match_team_selection():
     return None
 
 def render_sidebar_filters():
-    st.sidebar.header("Filters")
 
     # exclude_goalkeeper = st.sidebar.checkbox(
     #     "Exclude GK",
     #     value=True,
     # )
 
+    st.sidebar.space()
     show_metrics = st.sidebar.checkbox(
         "Show Metrics on Pitch",
         value=True,
@@ -81,6 +81,8 @@ def render_sidebar_filters():
         format_func=lambda k: k.replace("_", " ").capitalize() if k != None else "None",
         key=f"primary_metric",
     )
+
+    st.sidebar.header("Filters")
 
     zones = render_zone_selector()
 

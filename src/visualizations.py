@@ -656,12 +656,12 @@ def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False,
     if show_metrics:
         _show_metrics(fig, ax, ax_metrics, shape['metrics'], vertical_pitch, in_possession, is_submission=is_submission)
         if metric_column and 'metrics' in shape:
-            plot_metric(fig,pitch,ax, shape['metrics'], metric_column, players,vertical_pitch, show_legend=show_legend)
+            plot_metric(fig,pitch,ax, shape['metrics'], metric_column, players,in_possession,vertical_pitch, show_legend=show_legend)
 
     plt.tight_layout()
     return pitch, fig, ax
 
-def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertical=True, show_legend: bool = True):
+def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions,in_possession: bool, is_vertical=True, show_legend: bool = True):
     """
     Overlay a specific metric annotation on the pitch.
 
@@ -744,26 +744,28 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
             draw_arrow(p1, p2, txy, f"{(x_max - x_min):.1f} m")
 
         case "block_height":
-            x_val = float(metrics["block_height"])
-            y_min, y_max = pitch.dim.bottom, pitch.dim.top
+            if not in_possession:
+                x_val = float(metrics["block_height"])
+                y_min, y_max = pitch.dim.bottom, pitch.dim.top
 
-            pitch.plot([x_val, x_val], [y_min, y_max], ax=ax, ls="--", lw=1, color=SECONDARY_TEXT_COLOR)
+                pitch.plot([x_val, x_val], [y_min, y_max], ax=ax, ls="--", lw=1, color=SECONDARY_TEXT_COLOR)
 
-            
-            label = f"{height_from_own_goal(x_val):.1f} m"
-            
-            txy = P(x_val + x_pad*0.6, y_max - y_pad)
-            ax.text(txy[0], txy[1], label, fontsize=8, color=SECONDARY_TEXT_COLOR, ha="center", va="center", zorder=9)
+                
+                label = f"{height_from_own_goal(x_val):.1f} m"
+                
+                txy = P(x_val + x_pad*0.6, y_max - y_pad)
+                ax.text(txy[0], txy[1], label, fontsize=8, color=SECONDARY_TEXT_COLOR, ha="center", va="center", zorder=9)
 
         case "line_height":
-            x_val = float(metrics["line_height"])
-            y_min, y_max = pitch.dim.bottom, pitch.dim.top
+            if in_possession:
+                x_val = float(metrics["line_height"])
+                y_min, y_max = pitch.dim.bottom, pitch.dim.top
 
-            pitch.plot([x_val, x_val], [y_min, y_max], ax=ax, ls="--", lw=1, color=SECONDARY_TEXT_COLOR)
+                pitch.plot([x_val, x_val], [y_min, y_max], ax=ax, ls="--", lw=1, color=SECONDARY_TEXT_COLOR)
 
-            label = f"{height_from_own_goal(x_val):.1f} m"
-            txy = P(x_val - x_pad*0.6, y_max - y_pad)
-            ax.text(txy[0], txy[1], label, fontsize=8, color=SECONDARY_TEXT_COLOR, ha="center", va="center", zorder=9)
+                label = f"{height_from_own_goal(x_val):.1f} m"
+                txy = P(x_val - x_pad*0.6, y_max - y_pad)
+                ax.text(txy[0], txy[1], label, fontsize=8, color=SECONDARY_TEXT_COLOR, ha="center", va="center", zorder=9)
 
         case 'team_centroid':
             pitch.scatter(
