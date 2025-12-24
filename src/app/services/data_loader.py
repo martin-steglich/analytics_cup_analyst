@@ -12,8 +12,7 @@ def load_available_matches():
 def load_match_data(*,match_id:str, team_id:str, is_home_team:bool):
     return pre.prepare_team_tracking(match_id, team_id, is_home_team=is_home_team, 
                           include_phases_of_play = True,
-                          include_match_time = True, 
-                          include_in_possession = True,  
+                          include_match_time = True,   
                           include_ball_zones = True,
                           exclude_goalkeeper=True)
 

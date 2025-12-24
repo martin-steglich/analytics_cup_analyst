@@ -1,6 +1,7 @@
 # app/sidebar.py
 import streamlit as st
 from services.data_loader import load_available_matches
+from src.metrics import METRIC_UNITS
 
 def render_sidebar_match_team_selection():
     st.sidebar.header("Setup")
@@ -72,20 +73,37 @@ def render_sidebar_filters():
         value=True,
     )
 
+    show_metrics = [None, "width", "depth", "block_height","line_height", "team_centroid" ]
+    primary_metric = st.sidebar.selectbox(
+        "Primary metric",
+        options=show_metrics,
+        index=0,
+        format_func=lambda k: k.replace("_", " ").capitalize() if k != None else "None",
+        key=f"primary_metric",
+    )
+
     zones = render_zone_selector()
+
+    
 
     return dict(
         # exclude_goalkeeper=exclude_goalkeeper,
         zones = zones,
-        show_metrics = show_metrics
+        show_metrics = show_metrics,
+        primary_metric = primary_metric
     )
         
     return None
 
+# ZONES_GRID = [
+#     ["1L", "2L", "3L"],
+#     ["1C", "2C", "3C"],
+#     ["1R", "2R", "3R"],
+# ]
 ZONES_GRID = [
-    ["1L", "2L", "3L"],
-    ["1C", "2C", "3C"],
-    ["1R", "2R", "3R"],
+    ["3L", "3C", "3R"],
+    ["2L", "2C", "2R"],
+    ["1L", "1C", "1R"],
 ]
 def toggle_zone(zone_code):
     """Callback que se ejecuta en cada on_click."""
@@ -112,7 +130,6 @@ def toggle_all_zones():
 
 
 def render_zone_selector():
-    
     # Inicializar estado
     if "zones_selected" not in st.session_state:
         st.session_state["zones_selected"] = ["1L", "1C", "1R","2L", "2C", "2R","3L", "3C", "3R"]

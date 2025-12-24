@@ -109,13 +109,14 @@ def expand_phases_to_frames(phases_df: pd.DataFrame) -> pd.DataFrame:
 
 
     for _, r in phases_df.iterrows():
-        frames = np.arange(r.frame_start, r.frame_end + 1, dtype=int)
+        frames = np.arange(int(r.frame_start), int(r.frame_end), dtype=int)
         base = {col: r[col] for col in cols_keep if col not in ("frame_start", "frame_end")}
         df_phase = pd.DataFrame(base, index=frames)
         df_phase["frame_id"] = frames
         rows.append(df_phase)
 
     phases_per_frame = pd.concat(rows, ignore_index=True)
+    
 
     phases_per_frame = phases_per_frame.drop_duplicates(subset=["frame_id"])
     phases_per_frame = phases_per_frame.sort_values("frame_id").reset_index(drop=True)
@@ -292,70 +293,72 @@ def add_team_phase_of_play_info(
     df = df.copy()
 
     
-    df["team_in_possession"] = df["team_in_possession_id"] == my_team_id
+    df["in_possession"] = df["team_in_possession_id"] == my_team_id
+    
 
+    # print(df["team_in_possession"] == df["in_possession"])
 
     df["team_phase_type"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["team_in_possession_phase_type"],
         df["team_out_of_possession_phase_type"],
     )
 
     df["opponent_phase_type"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["team_out_of_possession_phase_type"],
         df["team_in_possession_phase_type"],
     )
 
 
     df["possession_start_team_third"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["possession_third_start"],
         df["possession_third_start"].map(invert_third),
     )
 
     df["possession_end_team_third"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["possession_third_end"],
         df["possession_third_end"].map(invert_third),
     )
 
     df["possession_start_team_channel"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["possession_channel_start"],
         df["possession_channel_start"].map(invert_channel)
     )
 
     df["possession_end_team_channel"] = np.where(
-        df["team_in_possession"],
+        df["in_possession"],
         df["possession_channel_end"],
         df["possession_channel_end"].map(invert_channel)
     )
 
     df["team_loss_in_possession"] = (
-        df["team_in_possession"] &
+        df["in_possession"] &
         df["team_possession_loss_in_phase"]
     )
 
     df["team_recovery_in_possession"] = (
-        (~df["team_in_possession"]) &
+        (~df["in_possession"]) &
         df["team_possession_loss_in_phase"]
     )
 
     df["possession_ends_in_opponent_box"] = (
-        df["team_in_possession"] & df["possession_penalty_area_end"]
+        df["in_possession"] & df["possession_penalty_area_end"]
     )
 
     df["possession_ends_in_team_box"] = (
-        (~df["team_in_possession"]) & df["possession_penalty_area_end"]
+        (~df["in_possession"]) & df["possession_penalty_area_end"]
     )
 
     df["possession_starts_in_opponent_box"] = (
-        df["team_in_possession"] & df["possession_penalty_area_start"]
+        df["in_possession"] & df["possession_penalty_area_start"]
     )
 
     df["possession_starts_in_team_box"] = (
-        (~df["team_in_possession"]) & df["possession_penalty_area_start"]
+        (~df["in_possession"]) & df["possession_penalty_area_start"]
     )
 
     return df

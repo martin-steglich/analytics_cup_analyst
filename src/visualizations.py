@@ -17,7 +17,7 @@ from pathlib import Path
 PITCH_LENGTH = 105
 PITCH_HALF_LENGTH = 52.5
 PITCH_WIDTH = 68
-BACKGROUND_COLOR = '#F5F5F5'
+BACKGROUND_COLOR = '#FFFFFF'
 PRIMARY_TEXT_COLOR = '#000000'
 SECONDARY_TEXT_COLOR = '#757575'
 PRIMARY_COLOR = '#649CCB'
@@ -614,12 +614,12 @@ def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False,
     
     if ax_pitch is None:
         ax_pitch = fig.add_axes([0, .1,.91, .5])
-    
-    if ax_metrics is None:
-        if vertical_pitch:
-            ax_metrics = fig.add_axes([.7,.1,.15,.5], sharey=ax_pitch)
-        else:
-            ax_metrics = fig.add_axes([.91,.17,.15,.36], sharey=ax_pitch)
+    if show_metrics:
+        if ax_metrics is None:
+            if vertical_pitch:
+                ax_metrics = fig.add_axes([.7,.1,.15,.5], sharey=ax_pitch)
+            else:
+                ax_metrics = fig.add_axes([.91,.17,.15,.36], sharey=ax_pitch)
     
     pitch, ax = get_pitch(ax_pitch,vertical_pitch)
 
@@ -740,7 +740,7 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
             
             p1 = P(x_min, y_anchor)
             p2 = P(x_max, y_anchor)
-            txy = P(x_mid, y_anchor - y_pad*0.8)
+            txy = P(x_mid +.5, y_anchor - y_pad*0.8)
             draw_arrow(p1, p2, txy, f"{(x_max - x_min):.1f} m")
 
         case "block_height":

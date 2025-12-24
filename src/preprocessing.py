@@ -1,4 +1,4 @@
-from kloppy import skillcorner, DataSet
+from kloppy import skillcorner
 import pandas as pd
 import numpy as np
 import re
@@ -424,26 +424,6 @@ def load_tracking_as_long_dataframe(match_id: str, is_home: bool = True):
     df_tracking_long = to_long_format(df_tracking, players_info=df_players_info)
     return df_tracking_long, metadata
 
-def add_in_possession_column(df: pd.DataFrame, team_id: int) -> pd.DataFrame:
-    """
-    Adds a boolean column 'in_possession' indicating if the specified team has ball possession.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Tracking data containing 'ball_owning_team_id' column.
-    team_id : int
-        The team ID to check for possession.
-
-    Returns
-    -------
-    pd.DataFrame
-        Same DataFrame with an additional 'in_possession' boolean column.
-    """
-    df = df.copy()
-    df["in_possession"] = df["ball_owning_team_id"] == team_id
-    return df
-
 def add_match_time(df: pd.DataFrame, period_col="period_id", timestamp_col="timestamp") -> pd.DataFrame:
     """
     Adds continuous match time columns (seconds and timedelta) combining period and timestamp.
@@ -607,7 +587,6 @@ def add_phases_of_play_info(
 def prepare_team_tracking(match_id, team_id, is_home_team,*, 
                           include_phases_of_play = True,
                           include_match_time = True, 
-                          include_in_possession = True,  
                           include_ball_zones = True,
                           exclude_goalkeeper=True) -> pd.DataFrame:
     """
@@ -632,8 +611,6 @@ def prepare_team_tracking(match_id, team_id, is_home_team,*,
         Whether to merge phases-of-play information.
     include_match_time : bool, default=True
         Whether to add continuous match time columns.
-    include_in_possession : bool, default=True
-        Whether to add in-possession labels.
     include_ball_zones : bool, default=True
         Whether to add ball zone information.
     exclude_goalkeeper : bool, default=True
@@ -653,9 +630,6 @@ def prepare_team_tracking(match_id, team_id, is_home_team,*,
     if include_match_time:
         df = add_match_time(df)
 
-    if include_in_possession:
-        df = add_in_possession_column(df, team_id)
-    
     if include_ball_zones:
         df = add_ball_zones(df)
 
@@ -666,7 +640,6 @@ def prepare_team_tracking(match_id, team_id, is_home_team,*,
 
 def prepare_team_tracking_from_raw_data(df_tracking_raw, team_id,*, 
                           include_match_time = True, 
-                          include_in_possession = True,  
                           include_ball_zones = True,
                           exclude_goalkeeper=True) -> pd.DataFrame:
     """
@@ -680,8 +653,6 @@ def prepare_team_tracking_from_raw_data(df_tracking_raw, team_id,*,
         Team identifier of interest.
     include_match_time : bool, default=True
         Whether to add continuous match time columns.
-    include_in_possession : bool, default=True
-        Whether to add in-possession labels.
     include_ball_zones : bool, default=True
         Whether to add ball zone information.
     exclude_goalkeeper : bool, default=True
@@ -698,9 +669,6 @@ def prepare_team_tracking_from_raw_data(df_tracking_raw, team_id,*,
     if include_match_time:
         df = add_match_time(df)
 
-    if include_in_possession:
-        df = add_in_possession_column(df, team_id)
-    
     if include_ball_zones:
         df = add_ball_zones(df)
 

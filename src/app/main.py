@@ -3,14 +3,14 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1] 
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
+# ROOT = Path(__file__).resolve().parents[1] 
+# if str(ROOT) not in sys.path:
+#     sys.path.append(str(ROOT))
 import streamlit as st
 
-from app.layout.tabs_container import render_tabs
-from app.layout.sidebar import render_sidebar_match_team_selection, render_sidebar_filters
-from app.services.data_loader import load_match_data, filter_by_zones, compute_match_metrics,exclude_goalkeepers, filter_by_in_out_possession, filter_by_phase_of_play, filter_by_period
+from src.app.layout.tabs_container import render_tabs
+from src.app.layout.sidebar import render_sidebar_match_team_selection, render_sidebar_filters
+from src.app.services.data_loader import load_match_data, filter_by_zones, compute_match_metrics,exclude_goalkeepers, filter_by_in_out_possession, filter_by_phase_of_play, filter_by_period
 from src.visualizations import setup_fonts
 # from app.tabs_container import render_tabs
 
@@ -31,7 +31,12 @@ def inject_fonts():
             font-size: 10px !important;
             padding: 0px;
         }
+
+         div[data-baseweb="select"] { background-color: var(--background-color); }
         </style>
+       
+        
+
         """,
         unsafe_allow_html=True,
     )
@@ -64,7 +69,7 @@ def main():
                              is_home_team=config['is_home_team'],
                              )
         
-        df_metrics = compute_match_metrics(df)
+        # df_metrics = compute_match_metrics(df)
 
         filters = render_sidebar_filters()
         if filters:
