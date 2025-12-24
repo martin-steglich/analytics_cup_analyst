@@ -63,3 +63,5 @@ https://drive.google.com/file/d/1o6tc69uIJiJL6JX_y4D67qbAtKy-r1k0/view?usp=shari
 ---
 
 ## [Optional] URL to Web App / Website
+
+https://analyticscupanalyst-martinsteglich.streamlit.app/
