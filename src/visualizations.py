@@ -28,14 +28,25 @@ CMAP = LinearSegmentedColormap.from_list("Pearl Earring - 100 colors",
 
 
 def setup_fonts():
+    """
+    Register and activate the project font family for Matplotlib plots.
+
+    This function loads Manrope (Regular and Bold) from the local assets folder
+    and sets Matplotlib's default font family accordingly.
+
+    Raises
+    ------
+    FileNotFoundError
+        If any of the required font files cannot be found.
+    """
     here = Path(__file__).resolve().parent
-    root = here.parent                               # .../analytics_cup_research
+    root = here.parent                               
     fonts_dir = here / "assets" / "fonts" 
 
     regular = fonts_dir / "Manrope-Regular.ttf"
     bold = fonts_dir / "Manrope-Bold.ttf"
 
-    # Validación útil (para debug)
+    
     if not regular.exists():
         raise FileNotFoundError(f"Font not found: {regular}")
     if not bold.exists():
@@ -49,12 +60,44 @@ setup_fonts()
 
 def height_from_own_goal(x: float) -> float:
     """
-    Convierte coordenada SkillCorner x (-52.5..52.5)
-    a metros desde el arco propio (0..105)
+    Convert a SkillCorner x-coordinate to distance from the team's own goal.
+
+    SkillCorner coordinates use x in [-52.5, 52.5] for a full 105m pitch.
+    This helper maps x to [0, 105] by shifting the origin.
+
+    Parameters
+    ----------
+    x : float
+        SkillCorner x-coordinate in meters (range approximately [-52.5, 52.5]).
+
+    Returns
+    -------
+    float
+        Distance from own goal line in meters (range approximately [0, 105]).
     """
     return float(x + PITCH_HALF_LENGTH)
 
 def get_pitch(ax:Axes, vertical: bool = True, draw: bool = True) -> tuple:
+    """
+    Create a mplsoccer pitch (vertical or horizontal) and optionally draw it.
+
+    Adds an "Attack" direction arrow annotation to the axes.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes on which the pitch will be created/drawn.
+    vertical : bool, default=True
+        If True, uses a VerticalPitch. If False, uses a horizontal Pitch.
+    draw : bool, default=True
+        If True, draws the pitch immediately on `ax`.
+
+    Returns
+    -------
+    tuple
+        (pitch, ax) where pitch is an mplsoccer Pitch/VerticalPitch instance
+        and ax is the same matplotlib Axes passed in.
+    """
     if vertical:
         pitch = VerticalPitch(pitch_type='skillcorner',
                     line_zorder=10,
@@ -96,6 +139,33 @@ def get_pitch(ax:Axes, vertical: bool = True, draw: bool = True) -> tuple:
 
 def plot_line_by_state(ax, t, y, state, *, lw=2,
                        color_in=None, color_out="0.6"):
+    """
+    Plot a time series with line color changing according to a boolean state.
+
+    The series is segmented whenever `state` changes, and each segment is
+    plotted in a different color (e.g., in-possession vs out-of-possession).
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes on which to plot.
+    t : array-like
+        Time values (x-axis).
+    y : array-like
+        Metric values (y-axis).
+    state : array-like of bool
+        Boolean state for each time step. Consecutive values form segments.
+    lw : float, default=2
+        Line width.
+    color_in : any, optional
+        Color used when state is True.
+    color_out : any, default="0.6"
+        Color used when state is False.
+
+    Returns
+    -------
+    None
+    """
     t = np.asarray(t)
     y = np.asarray(y)
     state = np.asarray(state).astype(bool)
@@ -111,6 +181,30 @@ def plot_line_by_state(ax, t, y, state, *, lw=2,
     ax.plot(t[start:], y[start:], color=c, linewidth=lw)
 
 def plot_timeline_by_metric_half(timeline_df, metric_col, title=None):
+    """
+    Plot a metric timeline split by halves (two subplots).
+
+    The input timeline is expected to contain `period_id` and `time_bin`.
+    Time is displayed in minutes relative to the start of each half.
+
+    If `in_possession_majority` is present, the line is colored by that state.
+
+    Parameters
+    ----------
+    timeline_df : pandas.DataFrame
+        Timeline DataFrame (typically output of build_timeline/build_half_timelines).
+        Must include: time_bin, period_id, and the selected metric column.
+        Optionally includes: in_possession_majority.
+    metric_col : str
+        Column name of the metric to plot.
+    title : str, optional
+        Title to use for the figure. If None, a default title is used.
+
+    Returns
+    -------
+    None
+        Displays the plot using matplotlib.
+    """
     df = timeline_df.copy().sort_values("time_bin")
 
     first_half  = df[df["period_id"] == 1].copy()
@@ -175,6 +269,32 @@ def plot_timeline_by_metric_half(timeline_df, metric_col, title=None):
     plt.show()
 
 def plot_timeline_by_metric_full_match(timeline_df, metric_col, title=None):
+    """
+    Plot a metric timeline for the full match on a single axis.
+
+    Adds standard x-ticks every 15 minutes and draws a vertical line at
+    the end of the first half (HT) based on `period_id`.
+
+    Parameters
+    ----------
+    timeline_df : pandas.DataFrame
+        Timeline DataFrame containing at least: time_bin, period_id, and the
+        selected metric column.
+    metric_col : str
+        Column name of the metric to plot.
+    title : str, optional
+        Title to use for the figure. If None, a default title is used.
+
+    Returns
+    -------
+    None
+        Displays the plot using matplotlib.
+
+    Notes
+    -----
+    - This function calls `ax.legend()` but does not assign labels explicitly
+      unless the plotted artists include them.
+    """
     df = timeline_df.copy().sort_values("time_bin")
 
     fig, ax = plt.subplots(figsize=(14,4))
@@ -208,9 +328,26 @@ def build_zone_matrix_from_metrics(
     possession: str  # "in" o "out"
 ) -> np.ndarray:
     """
-    Construye una matriz 3x3 [zone_x, zone_y] a partir del dict
-    devuelto por build_metrics_by_zone_possession, filtrando por
-    métrica e in/out possession.
+    Build a 3x3 zone matrix for a given metric and possession state.
+
+    Converts a dictionary keyed by (zone_x, zone_y, "in"|"out") into a dense
+    matrix of shape (ZONE_X, ZONE_Y), where each cell contains the metric value
+    for that ball zone and possession state.
+
+    Parameters
+    ----------
+    metrics_by_zone : dict
+        Dictionary produced by `build_metrics_by_zone_possession`, where keys are
+        (zone_x, zone_y, possession_str) and values contain metric fields.
+    metric : str
+        Metric name to extract (e.g., "compactness", "width", "block_height").
+    possession : str
+        Possession filter: "in" or "out".
+
+    Returns
+    -------
+    numpy.ndarray
+        A (ZONE_X, ZONE_Y) matrix with metric values and NaNs where unavailable.
     """
     m = np.full((ZONE_X, ZONE_Y), np.nan)
 
@@ -223,6 +360,19 @@ def build_zone_matrix_from_metrics(
     return m
 
 def print_zone_matrix_with_labels(matrix):
+    """
+    Print a 3x3 zone matrix with human-readable zone labels.
+
+    Parameters
+    ----------
+    matrix : array-like
+        Matrix of shape (3, 3) aligned with (zone_x, zone_y).
+
+    Returns
+    -------
+    None
+        Prints formatted values to stdout.
+    """
     for zx in range(3):
         row = []
         for zy in range(3):
@@ -240,15 +390,38 @@ def plot_zone_heatmap(
     cmap=CMAP
 ):
     """
-    Dibuja el heatmap 3x3 de una métrica para toda la cancha,
-    usando el dict de métricas por zona/posesión.
+    Plot a 3x3 pitch heatmap for an aggregated metric by ball zone.
 
-    metrics_by_zone: dict de build_metrics_by_zone_possession
-    metric_name: "compactness", "width", etc.
-    possession: "in" o "out"
+    Builds a 3x3 matrix from `metrics_by_zone` for the requested metric and
+    possession state, then visualizes it on a vertical mplsoccer pitch.
+
+    Parameters
+    ----------
+    metrics_by_zone : dict
+        Dictionary keyed by (zone_x, zone_y, "in"|"out") containing aggregated
+        metric values (output of `build_metrics_by_zone_possession`).
+    metric_name : str
+        Metric to visualize (e.g., "compactness", "width", "depth").
+    possession : str
+        Possession state to visualize: "in" or "out".
+    vmin, vmax : float, optional
+        Color scale bounds passed to `pitch.heatmap`.
+    cmap : matplotlib.colors.Colormap, optional
+        Colormap used for the heatmap.
+
+    Returns
+    -------
+    tuple
+        (fig, ax) where fig is a matplotlib Figure and ax is the pitch Axes.
+
+    Notes
+    -----
+    - For "line_height" and "block_height", values are shifted to represent
+      meters from own goal (0..105) and the colorbar unit is updated.
+    - `pitch.label_heatmap` is used to print cell values on the pitch.
     """
  
-    # 1) construir la matriz 3x3 desde el dict
+    
     matrix = build_zone_matrix_from_metrics(
         metrics_by_zone,
         metric_name,
@@ -261,8 +434,7 @@ def plot_zone_heatmap(
         matrix = np.where(np.isnan(matrix), np.nan, matrix + PITCH_HALF_LENGTH)
         unit = "m (from own goal)"
 
-    # 2) construir el dict `stats` que espera pitch.heatmap
-    #    OJO: pcolormesh espera statistic[y, x], así que transponemos
+
     statistic = np.flipud(matrix.T)   # (ZONE_Y, ZONE_X)
 
     x_grid = np.linspace(PITCH_MIN_X, PITCH_MAX_X, ZONE_X + 1)
@@ -297,14 +469,7 @@ def plot_zone_heatmap(
         fontsize=8
     )
 
-    # hm = pitch.heatmap(stats, ax=ax, vmin=vmin, vmax=vmax,cmap=cmap)
-    # pitch.label_heatmap(
-    #     stats,
-    #     ax=ax,
-    #     str_format="{:.1f}",
-    #     color="green",
-    #     fontsize=8
-    # )
+
 
     cbar = fig.colorbar(hm, ax=ax, fraction=0.046, pad=0.04)
     if unit:
@@ -317,7 +482,33 @@ def plot_team_shape_for_zone(
     title_prefix="Average team shape"
 ):
     """
-    Dibuja la forma promedio del equipo en una zona concreta y estado de posesión.
+    Plot an average team shape for a specific ball zone and possession state.
+
+    Parameters
+    ----------
+    shapes : dict
+        Dictionary of shapes keyed by (zone_x, zone_y, possession_key).
+        The expected structure is produced by your average-shape builders and
+        contains at least: players, hull, ball_x_mean, ball_y_mean.
+    zone_x : int
+        Longitudinal zone index.
+    zone_y : int
+        Lateral zone index.
+    in_possession : bool or str
+        Possession selector used for the key lookup. (Note: this function uses
+        the value directly in the key.)
+    title_prefix : str, default="Average team shape"
+        Title prefix for the plot (currently not enforced in the code).
+
+    Returns
+    -------
+    tuple
+        (fig, ax) where fig is a matplotlib Figure and ax is the pitch Axes.
+
+    Raises
+    ------
+    ValueError
+        If the requested (zone_x, zone_y, in_possession) key is not available.
     """
     key = (zone_x, zone_y, in_possession)
     if key not in shapes:
@@ -336,7 +527,7 @@ def plot_team_shape_for_zone(
     ax_pitch = fig.add_axes([0, .1,.91, .5])
     pitch, ax = get_pitch(ax_pitch)
 
-    # Convex hull (asumiendo mismo sistema de coordenadas que el pitch)
+    
     if hull is not None :
         hull_path = list(hull.vertices) + [hull.vertices[0]]
         hull_pts = players.iloc[hull_path][["x", "y"]]
@@ -358,7 +549,7 @@ def plot_team_shape_for_zone(
         ax=ax
     )
     
-    # Balón promedio
+    
     pitch.scatter(
         ball_x, ball_y,
         marker="football", s=70,
@@ -371,7 +562,47 @@ def plot_team_shape_for_zone(
     return fig, ax
 
 def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False, metric_column:str=None, in_possession:bool=True, is_submission: bool=True, show_legend: bool = True, fig: Figure =None, ax_pitch: Axes =None, ax_metrics: Axes =None):
+    """
+    Plot a single team shape (players, hull, and mean ball position) on a pitch.
 
+    Optionally displays a side panel with key metrics and overlays specific
+    metric annotations (e.g., width/depth arrows, block/line height lines,
+    centroid marker).
+
+    Parameters
+    ----------
+    shape : dict
+        Shape dictionary containing:
+        - players : DataFrame with x, y
+        - hull : scipy.spatial.ConvexHull (optional)
+        - ball_x_mean, ball_y_mean : float (optional)
+        - metrics : dict (required if show_metrics=True)
+    vertical_pitch : bool, default=False
+        If True, draw the pitch vertically.
+    show_metrics : bool, default=False
+        If True, show a metrics panel via `_show_metrics`.
+    metric_column : str, optional
+        Metric name to annotate on the pitch (e.g., "width", "depth",
+        "block_height", "line_height", "team_centroid").
+    in_possession : bool, default=True
+        Used to filter which metrics are shown in the panel.
+    is_submission : bool, default=True
+        If True, hides some metrics to match submission presentation choices.
+    show_legend : bool, default=True
+        Whether to display legend for annotations that add labeled artists.
+    fig : matplotlib.figure.Figure, optional
+        Existing figure to draw into. If None, a new figure is created.
+    ax_pitch : matplotlib.axes.Axes, optional
+        Existing axes for the pitch. If None, axes are created.
+    ax_metrics : matplotlib.axes.Axes, optional
+        Existing axes for the metrics panel. If None, axes are created.
+
+    Returns
+    -------
+    tuple
+        (pitch, fig, ax) where pitch is an mplsoccer Pitch/VerticalPitch,
+        fig is the matplotlib Figure, and ax is the pitch Axes.
+    """
     players = shape["players"]
     hull = shape["hull"]
     ball_x = shape["ball_x_mean"]
@@ -392,7 +623,7 @@ def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False,
     
     pitch, ax = get_pitch(ax_pitch,vertical_pitch)
 
-    # Convex hull (asumiendo mismo sistema de coordenadas que el pitch)
+    
     if hull is not None :
         hull_path = list(hull.vertices) + [hull.vertices[0]]
         hull_pts = players.iloc[hull_path][["x", "y"]]
@@ -414,7 +645,7 @@ def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False,
         ax=ax
     )
     
-    # Balón promedio
+    
     pitch.scatter(
         ball_x, ball_y,
         marker="football", s=70,
@@ -431,13 +662,45 @@ def plot_team_shape(shape, *,vertical_pitch:bool=False, show_metrics:bool=False,
     return pitch, fig, ax
 
 def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertical=True, show_legend: bool = True):
+    """
+    Overlay a specific metric annotation on the pitch.
+
+    Supported annotations:
+    - "width": double-headed arrow showing lateral spread (max y - min y)
+    - "depth": double-headed arrow showing longitudinal spread (max x - min x)
+    - "block_height": vertical line at the block height percentile
+    - "line_height": vertical line at the line height percentile
+    - "team_centroid": star marker at (team_centroid_x, team_centroid_y)
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure containing the plot (not always used directly).
+    pitch : mplsoccer.Pitch or mplsoccer.VerticalPitch
+        Pitch instance used to draw and convert dimensions.
+    ax : matplotlib.axes.Axes
+        Axes to annotate.
+    metrics : dict
+        Dictionary of computed metrics (e.g., from `get_team_metrics`).
+    metric_name : str
+        Name of the metric annotation to draw.
+    player_positions : pandas.DataFrame
+        Player positions used to compute ranges, must include "x" and "y".
+    is_vertical : bool, default=True
+        Whether the pitch is vertical (affects coordinate mapping).
+    show_legend : bool, default=True
+        Whether to show legend for labeled annotations (e.g., centroid).
+
+    Returns
+    -------
+    None
+    """
     players = player_positions
 
     def P(x, y):
-        # mapea coords (x,y) reales a coords de dibujo según orientación
         return (y, x) if is_vertical else (x, y)
 
-    # offsets relativos
+    
     x_len = (pitch.dim.right - pitch.dim.left)
     y_len = (pitch.dim.top - pitch.dim.bottom)
     x_pad = 0.03 * x_len if is_vertical else 0.05 * x_len
@@ -461,8 +724,8 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
             y_right = float(players["y"].max())
             y_mid = (y_left + y_right) / 2
 
-            x_anchor = float(players["x"].min()) - x_pad  # a la izquierda del bloque
-            # flecha en y, a x constante
+            x_anchor = float(players["x"].min()) - x_pad  
+            
             p1 = P(x_anchor, y_left)
             p2 = P(x_anchor, y_right)
             txy = P(x_anchor - x_pad*0.6, y_mid)
@@ -473,8 +736,8 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
             x_max = float(players["x"].max())
             x_mid = (x_min + x_max) / 2
 
-            y_anchor = float(players["y"].min()) - y_pad  # abajo del bloque
-            # flecha en x, a y constante
+            y_anchor = float(players["y"].min()) - y_pad  
+            
             p1 = P(x_min, y_anchor)
             p2 = P(x_max, y_anchor)
             txy = P(x_mid, y_anchor - y_pad*0.8)
@@ -486,9 +749,9 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
 
             pitch.plot([x_val, x_val], [y_min, y_max], ax=ax, ls="--", lw=1, color=SECONDARY_TEXT_COLOR)
 
-            # texto cerca de la línea
+            
             label = f"{height_from_own_goal(x_val):.1f} m"
-            # ubicarlo un poquito hacia el lado “fuera” del pitch
+            
             txy = P(x_val + x_pad*0.6, y_max - y_pad)
             ax.text(txy[0], txy[1], label, fontsize=8, color=SECONDARY_TEXT_COLOR, ha="center", va="center", zorder=9)
 
@@ -518,7 +781,33 @@ def plot_metric(fig,pitch, ax, metrics, metric_name, player_positions, is_vertic
             return
 
 def _show_metrics(fig: Figure,ax_pitch: Axes,ax_metrics: Axes, metrics: dict, is_vertical: bool, in_possession: bool, is_submission: bool=True):
-    
+    """
+    Render a compact metrics panel next to the pitch.
+
+    Filters and formats a subset of metrics and prints them as text on a
+    dedicated axes (with axis turned off).
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Parent figure.
+    ax_pitch : matplotlib.axes.Axes
+        Pitch axes (used for alignment/sharing).
+    ax_metrics : matplotlib.axes.Axes
+        Axes where the metrics panel is drawn.
+    metrics : dict
+        Dictionary of metric values.
+    is_vertical : bool
+        If True, uses a vertical layout for the metrics panel.
+    in_possession : bool
+        Controls filtering of block/line height depending on possession state.
+    is_submission : bool, default=True
+        If True, hides additional metrics to match submission presentation.
+
+    Returns
+    -------
+    None
+    """
     not_shown_metrics = ['team_centroid_x','team_centroid_y',"n_players_used","centroid_ball_dist"]
     if is_submission:
         not_shown_metrics += ['block_height','line_height']
@@ -566,6 +855,37 @@ def _show_metrics(fig: Figure,ax_pitch: Axes,ax_metrics: Axes, metrics: dict, is
     ax_metrics.axis('off')
         
 def plot_comparission_shapes(shape_left, shape_right,*,vertical_pitch:bool=False, show_metrics:bool=False, metric_column:str=None, titles:list=None, in_possession:bool=True, is_submission: bool=True):
+    """
+    Plot two team shapes side-by-side for comparison.
+
+    Draws two pitches and optionally displays metric panels and pitch
+    annotations, enabling visual comparison between two average shapes
+    (e.g., different possession states, phases, or ball zones).
+
+    Parameters
+    ----------
+    shape_left : dict
+        Shape dictionary for the left plot.
+    shape_right : dict
+        Shape dictionary for the right plot.
+    vertical_pitch : bool, default=False
+        If True, draw pitches vertically.
+    show_metrics : bool, default=False
+        If True, show metrics panels for both shapes.
+    metric_column : str, optional
+        Metric annotation to overlay on the pitch (see `plot_metric`).
+    titles : list of str, optional
+        Titles for [left, right] plots.
+    in_possession : bool, default=True
+        Possession context passed to metric filtering/display.
+    is_submission : bool, default=True
+        Controls which metrics are shown for submission-friendly visuals.
+
+    Returns
+    -------
+    tuple
+        (pitch_left, pitch_right, fig, ax_left, ax_right)
+    """
     fig = plt.figure(figsize=(8,12))
     fig.patch.set_facecolor(BACKGROUND_COLOR)
     ax_pitch_left = fig.add_axes([0, .1,.91, .5])

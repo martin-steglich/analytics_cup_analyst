@@ -1,4 +1,4 @@
-from kloppy import skillcorner
+from kloppy import skillcorner, DataSet
 import pandas as pd
 import numpy as np
 import re
@@ -17,9 +17,36 @@ ZONE_X = 3
 ZONE_Y = 3
 
 def load_available_matches() -> pd.DataFrame:
+    """
+    Load the list of available SkillCorner OpenData matches.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing metadata for all available matches as provided
+        in the SkillCorner OpenData repository.
+    """
     return pd.read_json("https://raw.githubusercontent.com/SkillCorner/opendata/refs/heads/master/data/matches.json")
 
 def load_metadata(match_id: int | str) -> dict:
+    """
+    Load match-level metadata for a given match.
+
+    Parameters
+    ----------
+    match_id : int or str
+        SkillCorner match identifier.
+
+    Returns
+    -------
+    dict
+        Parsed JSON dictionary containing match metadata.
+
+    Raises
+    ------
+    requests.HTTPError
+        If the metadata file cannot be retrieved (non-200 response).
+    """
     url = (
         "https://raw.githubusercontent.com/SkillCorner/opendata/"
         f"master/data/matches/{match_id}/{match_id}_match.json"
@@ -30,8 +57,22 @@ def load_metadata(match_id: int | str) -> dict:
 
 def load_tracking(match_id: str):
     """
-    Carga datos de tracking de SkillCorner OpenData para un partido dado.
-    Devuelve (dataset_kloppy, metadata_kloppy).
+    Load SkillCorner tracking data for a given match using Kloppy.
+
+    The tracking data is loaded from the SkillCorner OpenData repository and
+    downsampled from 10 FPS to 5 FPS.
+
+    Parameters
+    ----------
+    match_id : str
+        SkillCorner match identifier.
+
+    Returns
+    -------
+    tuple
+        (dataset, metadata) where:
+        - dataset is a Kloppy tracking dataset
+        - metadata is the associated Kloppy metadata object
     """
     tracking_data_github_url = (
         f"https://media.githubusercontent.com/media/SkillCorner/opendata/master/"
@@ -52,20 +93,63 @@ def load_tracking(match_id: str):
     return dataset, dataset.metadata
 
 def load_phases_of_play(match_id: str) -> pd.DataFrame:
+    """
+    Load phases-of-play data for a given match.
+
+    Parameters
+    ----------
+    match_id : str
+        SkillCorner match identifier.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing phases-of-play information as provided
+        in the SkillCorner OpenData repository.
+    """
     return pd.read_csv(f'https://raw.githubusercontent.com/SkillCorner/opendata/refs/heads/master/data/matches/{match_id}/{match_id}_phases_of_play.csv')
 
 def convert_to_dataframe(dataset, is_home: bool = True) -> pd.DataFrame:
     """
-    Convierte el dataset de kloppy a un DataFrame ancho (una fila por frame).
-    Alinea la orientación para que el equipo local ataque siempre hacia la derecha.
+    Convert a Kloppy tracking dataset into a wide pandas DataFrame.
+
+    The orientation is normalized so that the selected team always attacks
+    from left to right.
+
+    Parameters
+    ----------
+    dataset : kloppy.Dataset
+        Kloppy tracking dataset.
+    is_home : bool, default=True
+        If True, assumes the dataset is from the home team perspective.
+        If False, uses the away team orientation.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Wide tracking DataFrame with one row per frame.
     """
     to_orientation = "STATIC_HOME_AWAY" if is_home else "STATIC_AWAY_HOME"
     return dataset.transform(to_orientation=to_orientation).to_df(engine="pandas")
 
 def get_players_info_dataframe(match_id: str, teams=None) -> pd.DataFrame:
     """
-    Devuelve un DataFrame con info de jugadores:
-    player_id, jersey_no, name, team_id, position (si está disponible).
+    Build a player metadata DataFrame for a given match.
+
+    Parameters
+    ----------
+    match_id : str
+        SkillCorner match identifier.
+    teams : tuple, optional
+        Tuple of (home_team, away_team) Kloppy team objects. If None,
+        metadata is loaded automatically.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with one row per player, including:
+        player_id, jersey number, name, team_id, and starting position
+        (if available).
     """
     if teams is None:
         _, metadata = load_tracking(match_id)
@@ -98,11 +182,22 @@ def get_players_info_dataframe(match_id: str, teams=None) -> pd.DataFrame:
 
 def to_long_format(df: pd.DataFrame, players_info: pd.DataFrame | None = None) -> pd.DataFrame:
     """
-    Convierte el tracking ancho en formato largo:
-    - una fila por (frame_id, player_id)
-    - columnas x, y, d, s del jugador
-    - incluye ball_x, ball_y del mismo frame
-    - si se pasa players_info, agrega team_id, name, etc.
+    Convert wide tracking data into long (player-frame) format.
+
+    Produces one row per (frame_id, player_id) containing player coordinates
+    and ball position. Optionally enriches rows with player metadata.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Wide tracking DataFrame (one row per frame).
+    players_info : pandas.DataFrame, optional
+        Player metadata DataFrame to merge (e.g., team_id, name, position).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Long-format tracking DataFrame with one row per player per frame.
     """
     player_cols = [c for c in df.columns if re.match(r"^\d+_(x|y|d|s)$", c)]
 
@@ -153,11 +248,24 @@ def to_long_format(df: pd.DataFrame, players_info: pd.DataFrame | None = None) -
 
 def get_team_goalkeepers_id(df: pd.DataFrame, threshold: float = 0.05) -> list[int]:
     """
-    Heurística para identificar IDs de arqueros.
-    1. Primero intenta usar la columna 'position' si existe y es 'GK'.
-    2. Si no hay 'GK' explícito, intenta inferirlo:
-       - ordena jugadores por x (más cerca de su propio arco)
-       - mira quién ocupa esa posición la mayoría del tiempo.
+    Identify goalkeeper player IDs using positional heuristics.
+
+    The function first looks for explicit goalkeeper labels ("GK").
+    If unavailable, it infers goalkeepers based on players consistently
+    positioned closest to their own goal.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Long-format tracking data containing player positions.
+    threshold : float, default=0.05
+        Minimum proportion of frames required to consider a player
+        as a goalkeeper candidate.
+
+    Returns
+    -------
+    list of int
+        List of goalkeeper player IDs.
     """
     gk_mask = (df.get("position") == "GK") if "position" in df.columns else pd.Series(False, index=df.index)
     goalkeepers = df[gk_mask]["player_id"].unique().tolist()
@@ -177,8 +285,29 @@ def get_goalkeeper_by_frame(
     min_seconds: float = 2.0,
 ) -> pd.DataFrame:
     """
-    Para cada frame_id, devuelve cuál player_id actuó como arquero estable.
-    Suaviza microcambios de 1-2 frames.
+    Determine the active goalkeeper for each frame.
+
+    Applies temporal smoothing to avoid short-lived goalkeeper switches
+    caused by noise or brief positional changes.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Long-format tracking data.
+    gk_ids : list of int
+        Candidate goalkeeper player IDs.
+    fps : int, default=5
+        Frames per second of the tracking data.
+    min_seconds : float, default=2.0
+        Minimum duration (in seconds) for a goalkeeper segment to be
+        considered stable.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns:
+        - frame_id
+        - gk_player_id
     """
     def pick_gk_for_frame(frame_df: pd.DataFrame) -> int:
         in_frame_gks = frame_df[frame_df["player_id"].isin(gk_ids)]
@@ -239,8 +368,22 @@ def get_goalkeeper_by_frame(
 
 def exclude_goalkeepers_for_match(df: pd.DataFrame, threshold: float = 0.05) -> pd.DataFrame:
     """
-    Devuelve el df sin el arquero (por frame), usando las heurísticas anteriores.
-    Útil para calcular bloque defensivo/compactness de campo sin que el GK arruine la profundidad.
+    Remove goalkeepers from tracking data on a frame-by-frame basis.
+
+    Useful for team shape and compactness analysis where goalkeeper
+    positions would artificially inflate depth and spread metrics.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Long-format tracking data for a single team.
+    threshold : float, default=0.05
+        Threshold used to identify goalkeeper candidates.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Tracking DataFrame with goalkeeper rows removed.
     """
     team_gk = get_team_goalkeepers_id(df, threshold=threshold)
     gk_by_frame = get_goalkeeper_by_frame(df, gk_ids=team_gk, fps=5, min_seconds=2.0)
@@ -255,11 +398,25 @@ def exclude_goalkeepers_for_match(df: pd.DataFrame, threshold: float = 0.05) -> 
 
 def load_tracking_as_long_dataframe(match_id: str, is_home: bool = True):
     """
-    Carga todo junto:
-    - tracking ancho desde kloppy
-    - lo convierte a largo
-    - agrega metadata de jugadores
-    Devuelve (df_tracking_long, metadata_kloppy)
+    Load and prepare tracking data in long format.
+
+    This is a convenience wrapper that:
+    - loads tracking data via Kloppy
+    - converts it to a wide DataFrame
+    - converts it to long format
+    - merges player metadata
+
+    Parameters
+    ----------
+    match_id : str
+        SkillCorner match identifier.
+    is_home : bool, default=True
+        Whether the selected team is the home team.
+
+    Returns
+    -------
+    tuple
+        (df_tracking_long, metadata)
     """
     dataset, metadata = load_tracking(match_id)
     df_tracking = convert_to_dataframe(dataset, is_home=is_home)
@@ -331,6 +488,24 @@ def add_match_time(df: pd.DataFrame, period_col="period_id", timestamp_col="time
     return df
 
 def get_pitch_zone(x, y):
+    """
+    Assign a pitch zone index based on (x, y) ball coordinates.
+
+    The pitch is divided into a ZONE_X by ZONE_Y grid. Coordinates are
+    mapped to discrete zone indices.
+
+    Parameters
+    ----------
+    x : float
+        Ball x-coordinate.
+    y : float
+        Ball y-coordinate.
+
+    Returns
+    -------
+    tuple of int
+        (zone_x, zone_y) indices.
+    """
     try:
         xf = float(x)
         yf = float(y)
@@ -354,13 +529,43 @@ def get_pitch_zone(x, y):
     return zx, zy
 
 def get_zone_label(zx,zy):
+    """
+    Convert zone indices into a human-readable zone label.
+
+    Parameters
+    ----------
+    zx : int
+        Longitudinal zone index.
+    zy : int
+        Lateral zone index.
+
+    Returns
+    -------
+    str
+        Zone label (e.g., "1L", "2C", "3R").
+    """
     third = str(zx + 1)
     channel = ["L", "C", "R"][zy]
 
     return third + channel
 
 def add_ball_zones(df):
-    # df: tracking de un partido, con ball_x, ball_y, frame_id, etc.
+    """
+    Add ball zone indices and labels to tracking data.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Tracking data containing ball_x and ball_y columns.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with added columns:
+        - ball_zone_x
+        - ball_zone_y
+        - ball_zone_label
+    """
     df = df.copy()
     df["ball_zone_x"], df["ball_zone_y"] = zip(*df.apply(
         lambda r: get_pitch_zone(r["ball_x"], r["ball_y"]), axis=1
@@ -376,7 +581,22 @@ def add_phases_of_play_info(
     team_id: int,
 ) -> pd.DataFrame:
     """
-    Carga phases_of_play y las mergea al tracking frame a frame.
+    Load and merge phases-of-play information into tracking data.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Long-format tracking data.
+    match_id : str
+        SkillCorner match identifier.
+    team_id : int
+        Team identifier of interest.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Tracking DataFrame enriched with phases-of-play information
+        relative to the specified team.
     """
     phases_df = load_phases_of_play(match_id)
     phases_per_frame = phases.expand_phases_to_frames(phases_df)
@@ -389,7 +609,41 @@ def prepare_team_tracking(match_id, team_id, is_home_team,*,
                           include_match_time = True, 
                           include_in_possession = True,  
                           include_ball_zones = True,
-                          exclude_goalkeeper=True):
+                          exclude_goalkeeper=True) -> pd.DataFrame:
+    """
+    Prepare a fully enriched tracking dataset for a single team.
+
+    This high-level helper loads tracking data and optionally applies:
+    - phases-of-play information
+    - continuous match time
+    - possession labels
+    - ball spatial zones
+    - goalkeeper exclusion
+
+    Parameters
+    ----------
+    match_id : str
+        SkillCorner match identifier.
+    team_id : int
+        Team identifier of interest.
+    is_home_team : bool
+        Whether the team is the home team.
+    include_phases_of_play : bool, default=True
+        Whether to merge phases-of-play information.
+    include_match_time : bool, default=True
+        Whether to add continuous match time columns.
+    include_in_possession : bool, default=True
+        Whether to add in-possession labels.
+    include_ball_zones : bool, default=True
+        Whether to add ball zone information.
+    exclude_goalkeeper : bool, default=True
+        Whether to remove goalkeeper rows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Prepared tracking DataFrame for the selected team.
+    """
     df, _ = load_tracking_as_long_dataframe(match_id, is_home_team)
     df = df[df["team_id"] == team_id]
 
@@ -414,7 +668,30 @@ def prepare_team_tracking_from_raw_data(df_tracking_raw, team_id,*,
                           include_match_time = True, 
                           include_in_possession = True,  
                           include_ball_zones = True,
-                          exclude_goalkeeper=True):
+                          exclude_goalkeeper=True) -> pd.DataFrame:
+    """
+    Prepare team tracking data starting from an already loaded DataFrame.
+
+    Parameters
+    ----------
+    df_tracking_raw : pandas.DataFrame
+        Raw long-format tracking data.
+    team_id : int
+        Team identifier of interest.
+    include_match_time : bool, default=True
+        Whether to add continuous match time columns.
+    include_in_possession : bool, default=True
+        Whether to add in-possession labels.
+    include_ball_zones : bool, default=True
+        Whether to add ball zone information.
+    exclude_goalkeeper : bool, default=True
+        Whether to remove goalkeeper rows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Prepared tracking DataFrame for the selected team.
+    """
     df = df_tracking_raw.copy()
     df = df[df["team_id"] == team_id]
 

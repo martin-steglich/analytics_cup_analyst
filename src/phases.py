@@ -22,10 +22,48 @@ POSSESSION_COLUMNS  = [
 
 def expand_phases_to_frames(phases_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Expande cada fase de juego a todos los frames comprendidos entre
-    frame_start y frame_end (inclusive).
+    Expand phases-of-play intervals into a frame-level table.
 
-    Devuelve un DataFrame con UNA fila por frame_id.
+    Each row in `phases_df` defines a possession/phase interval via `frame_start`
+    and `frame_end`. This function expands every interval to all integer frame
+    ids in the inclusive range [frame_start, frame_end], producing a DataFrame
+    with one row per `frame_id` and the phase/possession metadata repeated for
+    each frame.
+
+    Parameters
+    ----------
+    phases_df : pandas.DataFrame
+        DataFrame containing phase/possession segments. Must include at least
+        `frame_start` and `frame_end` and the columns referenced in `cols_keep`
+        after renaming. The function renames several columns to standardized
+        `possession_*` names.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Frame-level DataFrame with exactly one row per `frame_id`, sorted by
+        `frame_id`. If multiple phase rows cover the same frame, duplicates are
+        removed keeping the first occurrence (after concatenation).
+
+    Notes
+    -----
+    - The output is suitable for a many-to-one merge into tracking data
+      (`tracking_df` has many player rows per frame, while this has one).
+    - Duplicate handling: `drop_duplicates(subset=["frame_id"])` is applied.
+      If overlaps exist, the retained row depends on the concatenation order.
+    - `frame_start` and `frame_end` are treated as inclusive bounds.
+
+    Raises
+    ------
+    KeyError
+        If required columns are missing from `phases_df` (before or after renaming).
+    ValueError
+        If `phases_df` is empty and `pd.concat(rows, ...)` is called with no rows.
+
+    Examples
+    --------
+    >>> phases_per_frame = expand_phases_to_frames(phases_df)
+    >>> phases_per_frame.head()
     """
     rows = []
 
@@ -89,8 +127,31 @@ def merge_phases_into_tracking(
     phases_per_frame: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Hace un left-join por frame_id para añadir info de phases_of_play
-    al tracking frame a frame.
+    Merge frame-level phases-of-play information into tracking data.
+
+    Performs a left join on `frame_id` to attach the (single-row-per-frame)
+    phase/possession metadata from `phases_per_frame` to the player-level
+    tracking table.
+
+    Parameters
+    ----------
+    tracking_df : pandas.DataFrame
+        Player-level tracking DataFrame. Must contain a `frame_id` column.
+        Typically contains multiple rows per frame (one per player).
+    phases_per_frame : pandas.DataFrame
+        Frame-level DataFrame produced by `expand_phases_to_frames`, with one
+        row per `frame_id`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Tracking DataFrame enriched with phases-of-play columns. The number of
+        rows equals `len(tracking_df)` (left join).
+
+    Notes
+    -----
+    - Uses `validate="many_to_one"` to ensure `phases_per_frame` has at most one
+      row per `frame_id`. If that condition is violated, pandas raises an error.
     """
     merged = tracking_df.merge(
         phases_per_frame,
@@ -101,6 +162,32 @@ def merge_phases_into_tracking(
     return merged
 
 def invert_third(third: str) -> str:
+    """
+    Convert an opponent-relative third label into a team-relative label.
+
+    This helper swaps defensive and attacking thirds and keeps the middle third
+    unchanged. It is useful when a possession start/end third is defined from
+    the perspective of the team in possession, and you want the equivalent
+    label from the perspective of a specific team.
+
+    Parameters
+    ----------
+    third : str
+        Third label. Expected values are:
+        - "defensive_third"
+        - "middle_third"
+        - "attacking_third"
+        Can also be NaN.
+
+    Returns
+    -------
+    str
+        Inverted third label:
+        - defensive_third -> attacking_third
+        - attacking_third -> defensive_third
+        - middle_third -> middle_third
+        Returns the input unchanged if it is NaN or an unknown value.
+    """
     if pd.isna(third):
         return third
     if third == "defensive_third":
@@ -110,6 +197,32 @@ def invert_third(third: str) -> str:
     return "middle_third"
 
 def invert_channel(channel: str) -> str:
+    """
+    Convert an opponent-relative channel label into a team-relative label.
+
+    This helper swaps left/right channels and keeps central unchanged. It is
+    useful when channel labels are defined from the perspective of the team in
+    possession, and you want the equivalent label from the perspective of a
+    specific team.
+
+    Parameters
+    ----------
+    channel : str
+        Channel label. Expected values include:
+        - "wide_left", "wide_right"
+        - "half_space_left", "half_space_right"
+        - "central"
+        Can also be NaN.
+
+    Returns
+    -------
+    str
+        Inverted channel label:
+        - wide_left <-> wide_right
+        - half_space_left <-> half_space_right
+        - central -> central
+        Returns the input unchanged if it is NaN or an unknown value.
+    """
     if pd.isna(channel):
         return channel 
     swap = {
@@ -126,9 +239,55 @@ def add_team_phase_of_play_info(
     my_team_id: int,
 ) -> pd.DataFrame:
     """
-    Añade una columna con la fase relevante para mi equipo:
-    - Si mi equipo está en posesión en ese frame -> phase = team_in_possession_phase_type
-    - Si no -> phase = team_out_of_possession_phase_type
+    Add team-relative phases-of-play and possession-context columns.
+
+    The phases-of-play data is typically defined relative to the team in
+    possession (e.g., `team_in_possession_phase_type`). This function adds
+    derived columns that are relative to `my_team_id`, so that "team phase" and
+    "opponent phase" are consistent regardless of whether the team is in or out
+    of possession in a given frame.
+
+    It also derives team-relative possession start/end locations (third/channel)
+    and several boolean flags describing turnovers and penalty-area context.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Tracking (or tracking+phases) DataFrame containing, at minimum:
+        - `team_in_possession_id`
+        - `team_in_possession_phase_type`, `team_out_of_possession_phase_type`
+        - `possession_third_start`, `possession_third_end`
+        - `possession_channel_start`, `possession_channel_end`
+        - `possession_penalty_area_start`, `possession_penalty_area_end`
+        - `team_possession_loss_in_phase`
+        Typically this is the output of `merge_phases_into_tracking`.
+    my_team_id : int
+        Team identifier for the team of interest.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of `df` with additional columns, including:
+        - `team_in_possession` (bool)
+        - `team_phase_type`, `opponent_phase_type`
+        - `possession_start_team_third`, `possession_end_team_third`
+        - `possession_start_team_channel`, `possession_end_team_channel`
+        - `team_loss_in_possession`, `team_recovery_in_possession`
+        - `possession_ends_in_opponent_box`, `possession_ends_in_team_box`
+        - `possession_starts_in_opponent_box`, `possession_starts_in_team_box`
+
+    Notes
+    -----
+    - Third/channel inversion is applied when `my_team_id` is NOT the team in
+      possession for the frame, so that the start/end locations remain
+      team-relative.
+    - `team_possession_loss_in_phase` is interpreted as "the team in possession
+      lost the ball during the phase". Therefore:
+        - `team_loss_in_possession` is True when `my_team_id` was in possession
+          and loss occurred.
+        - `team_recovery_in_possession` is True when `my_team_id` was out of
+          possession and the in-possession team lost the ball (i.e., my team
+          recovered possession).
     """
     df = df.copy()
 
