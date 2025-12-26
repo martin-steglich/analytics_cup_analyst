@@ -55,31 +55,34 @@ st.set_page_config(
 def main():
 
     st.title("Team Shape Analyzer")
-
     init_fonts()
 
-    # 1) Sidebar → el usuario elige partido, equipo, métrica, etc.
     config = render_sidebar_match_team_selection()
     
 
-    # # 2) Datos → cargamos métricas según match + team
+    
     if config:
-        df = load_match_data(match_id=config['match_id'], 
+
+        if config["match_id"] != None and config['team_id'] == None:
+            st.write("Please select a team from the sidebar")
+        else:
+            df = load_match_data(match_id=config['match_id'], 
                              team_id=config['team_id'], 
                              is_home_team=config['is_home_team'],
                              )
         
         # df_metrics = compute_match_metrics(df)
 
-        filters = render_sidebar_filters()
-        if filters:
-            # if filters.get('exclude_goalkeeper', False):
-            #     df = exclude_goalkeepers(df)
+            filters = render_sidebar_filters()
+            if filters:
+                # if filters.get('exclude_goalkeeper', False):
+                #     df = exclude_goalkeepers(df)
 
-            df = filter_by_zones(df, zones=filters['zones'])
-        
-            render_tabs(df, filters)
-        
+                df = filter_by_zones(df, zones=filters['zones'])
+            
+                render_tabs(df, filters)
+    else:
+        st.write("Please select a match and a team from the sidebar")  
     # df_metrics = load_match_metrics(
     #     match_id=config["match_id"],
     #     team_id=config["team_id"],
